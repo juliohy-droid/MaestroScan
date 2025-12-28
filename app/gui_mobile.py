@@ -16,9 +16,8 @@ def main(page: ft.Page):
     page.padding = 20
     page.scroll = ft.ScrollMode.AUTO
     
-    # --- BASE DE DATOS (HISTORIAL) ---
+    # --- BASE DE DATOS ---
     def inicializar_db():
-        # Usamos una ruta absoluta para evitar problemas en el servidor
         db_path = os.path.join(os.getcwd(), "maestro_scan.db")
         conn = sqlite3.connect(db_path)
         cursor = conn.cursor()
@@ -39,12 +38,11 @@ def main(page: ft.Page):
 
     inicializar_db()
 
-    # --- VARIABLES Y GPS ---
-    coordenadas = "Buscando GPS..."
+    # --- VARIABLES Y GPS (PROTEGIDO) ---
+    coordenadas = "Ubicación manual o no disponible"
     
     def on_location_event(e):
         nonlocal coordenadas
-        # Algunos navegadores devuelven el objeto distinto, aseguramos captura
         try:
             coordenadas = f"{e.latitude:.4f}, {e.longitude:.4f}"
             gps_text.value = f"📍 Ubicación: {coordenadas}"
@@ -52,19 +50,22 @@ def main(page: ft.Page):
         except:
             pass
 
-    # Geolocalizador
-    lp = ft.Geolocator()
-    page.overlay.append(lp)
-    lp.on_change = on_location_event
+    # Intentamos activar el GPS solo si la versión de Flet lo permite
+    try:
+        if hasattr(ft, "Geolocator"):
+            lp = ft.Geolocator()
+            page.overlay.append(lp)
+            lp.on_change = on_location_event
+        else:
+            coordenadas = "GPS no soportado en esta versión"
+    except Exception as ex:
+        coordenadas = f"GPS Off"
 
-    # --- MANEJO DE CÁMARA (CORREGIDO) ---
+    # --- MANEJO DE CÁMARA ---
     def capturar_foto(e):
-        file_picker.pick_files(
-            allow_multiple=False, 
-            file_type=ft.FilePickerFileType.IMAGE
-        )
+        file_picker.pick_files(allow_multiple=False, file_type=ft.FilePickerFileType.IMAGE)
 
-    def al_seleccionar_archivo(e): # <--- CAMBIO AQUÍ: Quitamos el tipo de evento problemático
+    def al_seleccionar_archivo(e):
         if e.files:
             analizar_y_reportar(e.files[0].name)
 
@@ -74,34 +75,29 @@ def main(page: ft.Page):
     # --- LÓGICA DE ANÁLISIS ---
     def analizar_y_reportar(nombre_foto):
         if not opciones_cultivo.value:
-            resultado_texto.value = "⚠️ Selecciona un cultivo primero"
+            resultado_texto.value = "⚠️ Selecciona un cultivo"
             resultado_texto.color = ft.Colors.RED
             page.update()
             return
 
         cargando.visible = True
-        resultado_texto.value = "Analizando imagen..."
+        resultado_texto.value = "Analizando plaga..."
         page.update()
 
-        # Motor de IA
         insecto = "Drosophila suzukii" if opciones_cultivo.value == "Frutilla" else "Agrotis ipsilon"
         categoria = clasificar_plaga(insecto)
         fecha_actual = datetime.now().strftime("%d/%m/%Y %H:%M")
         
         datos = {
-            "cultivo": opciones_cultivo.value,
-            "insecto": insecto,
-            "categoria": categoria,
-            "gps": coordenadas,
-            "fecha": fecha_actual
+            "cultivo": opciones_cultivo.value, "insecto": insecto,
+            "categoria": categoria, "gps": coordenadas, "fecha": fecha_actual
         }
 
-        # Generar archivos y guardar datos
         generar_pdf_profesional(datos)
         guardar_en_historial(datos)
         
         cargando.visible = False
-        resultado_texto.value = f"✅ Detectado: {insecto}\n📍 Coordenadas: {coordenadas}"
+        resultado_texto.value = f"✅ Detectado: {insecto}"
         resultado_texto.color = ft.Colors.GREEN_800
         btn_whatsapp.visible = True
         actualizar_lista_historial()
@@ -109,30 +105,24 @@ def main(page: ft.Page):
 
     # --- INTERFAZ ---
     logo = ft.Text("MaestroScan Pro", size=32, weight="bold", color=ft.Colors.GREEN_800)
-    gps_text = ft.Text(f"📍 Ubicación: {coordenadas}", italic=True, size=12)
+    gps_text = ft.Text(f"📍 {coordenadas}", italic=True, size=12)
     
     opciones_cultivo = ft.Dropdown(
-        label="Cultivo a monitorear",
+        label="Cultivo",
         options=[ft.dropdown.Option("Frutilla"), ft.dropdown.Option("Espárrago")],
         border_color=ft.Colors.GREEN_700
     )
 
     btn_escanear = ft.ElevatedButton(
-        " USAR CÁMARA Y ANALIZAR",
-        icon=ft.Icons.CAMERA_ALT,
+        " TOMAR FOTO", icon=ft.Icons.CAMERA_ALT,
         on_click=capturar_foto,
-        style=ft.ButtonStyle(
-            bgcolor=ft.Colors.GREEN_700, 
-            color=ft.Colors.WHITE, 
-            shape=ft.RoundedRectangleBorder(radius=10)
-        ),
-        height=60
+        style=ft.ButtonStyle(bgcolor=ft.Colors.GREEN_700, color="white"),
+        height=50
     )
 
     cargando = ft.ProgressBar(visible=False, color=ft.Colors.GREEN_700)
     resultado_texto = ft.Text("", weight="bold", text_align=ft.TextAlign.CENTER)
-
-    historial_lista = ft.Column(spacing=10)
+    historial_lista = ft.Column(spacing=5)
 
     def actualizar_lista_historial():
         historial_lista.controls.clear()
@@ -140,44 +130,32 @@ def main(page: ft.Page):
             db_path = os.path.join(os.getcwd(), "maestro_scan.db")
             conn = sqlite3.connect(db_path)
             cursor = conn.cursor()
-            cursor.execute("SELECT fecha, cultivo, insecto FROM historial ORDER BY id DESC LIMIT 5")
-            rows = cursor.fetchall()
-            for row in rows:
+            cursor.execute("SELECT fecha, cultivo, insecto FROM historial ORDER BY id DESC LIMIT 3")
+            for row in cursor.fetchall():
                 historial_lista.controls.append(
-                    ft.ListTile(
-                        leading=ft.Icon(ft.Icons.HISTORY, color=ft.Colors.GREEN_600),
-                        title=ft.Text(f"{row[1]} - {row[2]}"),
-                        subtitle=ft.Text(f"Fecha: {row[0]}"),
-                    )
+                    ft.Text(f"• {row[0]}: {row[1]} ({row[2]})", size=12)
                 )
             conn.close()
-        except:
-            pass
+        except: pass
         page.update()
 
     btn_whatsapp = ft.FloatingActionButton(
-        content=ft.Row([ft.Icon(ft.Icons.SHARE, color=ft.Colors.WHITE), ft.Text(" WhatsApp", color=ft.Colors.WHITE)], alignment=ft.MainAxisAlignment.CENTER),
+        content=ft.Icon(ft.Icons.SHARE, color="white"),
         bgcolor=ft.Colors.GREEN_600,
-        on_click=lambda _: page.launch_url(f"https://wa.me/56912345678?text=MaestroScan: Reporte de {opciones_cultivo.value}"),
-        visible=False,
-        width=160
+        on_click=lambda _: page.launch_url(f"https://wa.me/56912345678?text=Reporte MaestroScan"),
+        visible=False
     )
 
     actualizar_lista_historial()
 
     page.add(
         ft.Column([
-            logo,
-            gps_text,
+            logo, gps_text, ft.Divider(),
+            opciones_cultivo, btn_escanear,
+            cargando, resultado_texto,
             ft.Divider(),
-            opciones_cultivo,
-            btn_escanear,
-            cargando,
-            resultado_texto,
-            ft.Divider(),
-            ft.Text("Últimos Registros:", weight="bold", color=ft.Colors.GREY_700),
-            historial_lista,
-            ft.Divider(height=40, color="transparent")
+            ft.Text("Historial Reciente:", weight="bold"),
+            historial_lista
         ], horizontal_alignment=ft.CrossAxisAlignment.CENTER),
         btn_whatsapp
     )
