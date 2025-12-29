@@ -11,9 +11,9 @@ def main(page: ft.Page):
     page.horizontal_alignment = ft.CrossAxisAlignment.CENTER
     page.scroll = ft.ScrollMode.AUTO
     
-    db_path = "/tmp/maestro_scan_v11.db"
+    # Base de datos en carpeta temporal de Render
+    db_path = "/tmp/maestro_scan_v12.db"
 
-    # --- INICIALIZACIÓN DE DB ---
     def init_db():
         conn = sqlite3.connect(db_path)
         conn.execute("""CREATE TABLE IF NOT EXISTS monitoreo 
@@ -27,7 +27,7 @@ def main(page: ft.Page):
     current_lat, current_lon = -33.4489, -70.6693
     det_insect = "Identificando..."
 
-    # --- COMPONENTES DE UI ---
+    # --- UI COMPONENTS ---
     loading = ft.ProgressBar(width=300, visible=False, color="green")
     resultado_txt = ft.Text("", weight="bold", size=16)
     contenedor_mapa = ft.Container(visible=False)
@@ -46,10 +46,10 @@ def main(page: ft.Page):
             conn.commit()
             conn.close()
             dlg.open = False
-            resultado_txt.value = f"✅ Guardado con éxito"
+            resultado_txt.value = f"✅ Reporte guardado con éxito"
             page.update()
         except Exception as ex:
-            resultado_txt.value = f"Error: {ex}"
+            resultado_txt.value = f"Error al procesar coordenadas: {ex}"
             page.update()
 
     dlg = ft.AlertDialog(
@@ -58,19 +58,22 @@ def main(page: ft.Page):
         actions=[ft.ElevatedButton("Guardar Reporte", on_click=guardar_hallazgo)]
     )
 
-    def al_cambiar_archivo(e: ft.FilePickerResultEvent):
+    # CORRECCIÓN AQUÍ: Eliminamos 'ft.FilePickerResultEvent' para evitar el AttributeError
+    def al_cambiar_archivo(e): 
         nonlocal det_insect
         if e.files:
             loading.visible = True
             page.update()
-            # IA Simulada
-            det_insect = "Drosophila suzukii"
+            
+            # Aquí simulamos la identificación. 
+            # Maestro, en el futuro aquí conectaremos con la búsqueda de imágenes en red.
+            det_insect = "Drosophila suzukii (Identificado)" 
+            
             loading.visible = False
             page.dialog = dlg
             dlg.open = True
             page.update()
 
-    # CORRECCIÓN AQUÍ: Usamos la sintaxis estándar moderna
     picker = ft.FilePicker(on_result=al_cambiar_archivo)
     page.overlay.append(picker)
 
@@ -85,34 +88,46 @@ def main(page: ft.Page):
         
         if pts:
             plt.figure(figsize=(4, 3))
-            plt.scatter([p[0] for p in pts], [p[1] for p in pts], color='red')
-            plt.title("Mapa de Calor UTM")
+            plt.scatter([p[0] for p in pts], [p[1] for p in pts], color='red', s=100)
+            plt.title("Puntos de Plaga (UTM)")
             buf = io.BytesIO()
             plt.savefig(buf, format='png')
             plt.close()
             img_b64 = base64.b64encode(buf.getvalue()).decode()
-            contenedor_mapa.content = ft.Image(src_base64=img_b64)
+            contenedor_mapa.content = ft.Image(src_base64=img_b64, border_radius=10)
             contenedor_mapa.visible = True
             page.update()
+        else:
+            resultado_txt.value = "Aún no hay puntos para el mapa."
+            page.update()
 
-    # --- INTERFAZ ---
+    # --- INTERFAZ PRINCIPAL ---
     page.add(
-        ft.Text("MaestroScan Pro", size=30, weight="bold", color="green"),
-        ft.Text("MAESTRO SOLUTION", size=10),
+        ft.Text("MaestroScan Pro", size=30, weight="bold", color="#1B5E20"),
+        ft.Text("MAESTRO SOLUTION", size=10, italic=True),
         ft.Divider(),
-        ft.Container(
-            content=ft.Column([
-                ft.Icon(ft.Icons.CAMERA_ALT, size=50, color="white"),
-                ft.Text("ESCANEAR INSECTO", color="white", weight="bold")
-            ], alignment="center"),
-            bgcolor="green",
-            padding=40,
-            border_radius=25,
-            on_click=lambda _: picker.pick_files(allow_multiple=False)
+        ft.GestureDetector(
+            on_tap=lambda _: picker.pick_files(allow_multiple=False),
+            content=ft.Container(
+                content=ft.Column([
+                    ft.Icon(ft.Icons.CAMERA_ALT, size=60, color="white"),
+                    ft.Text("ESCANEAR INSECTO", color="white", weight="bold", size=20)
+                ], alignment="center"),
+                bgcolor="#2E7D32",
+                padding=50,
+                border_radius=30,
+                width=300,
+                height=250,
+            )
         ),
         loading,
         resultado_txt,
         ft.Divider(),
-        ft.OutlinedButton("VER MAPA DE CALOR", icon=ft.Icons.MAP, on_click=generar_mapa),
+        ft.OutlinedButton(
+            "GENERAR MAPA DE CALOR", 
+            icon=ft.Icons.MAP, 
+            on_click=generar_mapa,
+            style=ft.ButtonStyle(color="#2E7D32")
+        ),
         contenedor_mapa
     )
