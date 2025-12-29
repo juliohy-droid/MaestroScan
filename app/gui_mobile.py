@@ -6,12 +6,12 @@ import io
 import base64
 
 def main(page: ft.Page):
-    page.title = "MaestroScan Pro - Maestro Solution"
+    page.title = "MaestroScan Pro"
     page.theme_mode = ft.ThemeMode.LIGHT
     page.horizontal_alignment = ft.CrossAxisAlignment.CENTER
     page.scroll = ft.ScrollMode.AUTO
     
-    db_path = "/tmp/maestro_scan_v10.db"
+    db_path = "/tmp/maestro_scan_v11.db"
 
     # --- INICIALIZACIÓN DE DB ---
     def init_db():
@@ -35,9 +35,9 @@ def main(page: ft.Page):
     hospedero_in = ft.TextField(label="Hospedero / Cultivo")
     localidad_in = ft.TextField(label="Localidad")
 
-    # --- FUNCIONES DINÁMICAS (Carga bajo demanda) ---
+    # --- FUNCIONES ---
     def guardar_hallazgo(e):
-        import utm # Importación interna para evitar fallos de inicio
+        import utm
         try:
             u = utm.from_latlon(current_lat, current_lon)
             conn = sqlite3.connect(db_path)
@@ -46,10 +46,10 @@ def main(page: ft.Page):
             conn.commit()
             conn.close()
             dlg.open = False
-            resultado_txt.value = f"✅ Guardado: {det_insect}"
+            resultado_txt.value = f"✅ Guardado con éxito"
             page.update()
         except Exception as ex:
-            resultado_txt.value = f"Error GPS/UTM: {ex}"
+            resultado_txt.value = f"Error: {ex}"
             page.update()
 
     dlg = ft.AlertDialog(
@@ -58,19 +58,20 @@ def main(page: ft.Page):
         actions=[ft.ElevatedButton("Guardar Reporte", on_click=guardar_hallazgo)]
     )
 
-    def al_escanear(e):
+    def al_cambiar_archivo(e: ft.FilePickerResultEvent):
         nonlocal det_insect
         if e.files:
             loading.visible = True
             page.update()
-            # Simulación de IA para Maestro Solution
+            # IA Simulada
             det_insect = "Drosophila suzukii"
             loading.visible = False
             page.dialog = dlg
             dlg.open = True
             page.update()
 
-    picker = ft.FilePicker(on_result=al_escanear)
+    # CORRECCIÓN AQUÍ: Usamos la sintaxis estándar moderna
+    picker = ft.FilePicker(on_result=al_cambiar_archivo)
     page.overlay.append(picker)
 
     def generar_mapa(e):
@@ -94,10 +95,10 @@ def main(page: ft.Page):
             contenedor_mapa.visible = True
             page.update()
 
-    # --- CONSTRUCCIÓN DE LA PÁGINA ---
+    # --- INTERFAZ ---
     page.add(
         ft.Text("MaestroScan Pro", size=30, weight="bold", color="green"),
-        ft.Text("MAESTRO SOLUTION - TECNOLOGÍA AGRÍCOLA", size=10),
+        ft.Text("MAESTRO SOLUTION", size=10),
         ft.Divider(),
         ft.Container(
             content=ft.Column([
@@ -107,7 +108,7 @@ def main(page: ft.Page):
             bgcolor="green",
             padding=40,
             border_radius=25,
-            on_click=lambda _: picker.pick_files(allow_multiple=False, file_type=ft.FilePickerFileType.IMAGE)
+            on_click=lambda _: picker.pick_files(allow_multiple=False)
         ),
         loading,
         resultado_txt,
@@ -115,5 +116,3 @@ def main(page: ft.Page):
         ft.OutlinedButton("VER MAPA DE CALOR", icon=ft.Icons.MAP, on_click=generar_mapa),
         contenedor_mapa
     )
-
-# Fin del archivo
