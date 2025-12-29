@@ -6,13 +6,14 @@ import io
 import base64
 
 def main(page: ft.Page):
-    # 1. Configuración de inicio rápido
+    # Configuración de página ultra-compatible
     page.title = "MaestroScan Pro"
     page.horizontal_alignment = ft.CrossAxisAlignment.CENTER
-    page.theme_mode = ft.ThemeMode.LIGHT
     page.scroll = ft.ScrollMode.AUTO
+    page.theme_mode = ft.ThemeMode.LIGHT
     
-    db_path = "/tmp/maestro_sol_2025.db"
+    # Base de datos en memoria temporal
+    db_path = "/tmp/maestro_solution_v3.db"
 
     # --- ELEMENTOS DE INTERFAZ ---
     resultado_txt = ft.Text("", weight="bold", size=16, text_align=ft.TextAlign.CENTER)
@@ -22,13 +23,13 @@ def main(page: ft.Page):
 
     # --- LÓGICA DE ALMACENAMIENTO ---
     def guardar_datos(e):
-        import utm # Carga diferida para evitar errores de inicio
+        import utm 
         try:
-            # Coordenadas por defecto para la base de datos (se pueden ajustar luego)
+            # Coordenadas por defecto para Santiago/Chile
             u = utm.from_latlon(-33.45, -70.66) 
             conn = sqlite3.connect(db_path)
             conn.execute("CREATE TABLE IF NOT EXISTS monitoreo (id INTEGER PRIMARY KEY, fecha TEXT, insecto TEXT, hospedero TEXT, localidad TEXT, utm_e REAL, utm_n REAL)")
-            conn.execute("INSERT INTO monitoreo (fecha, insecto, hospedero, localidad, utm_e, utm_n) VALUES (?,?,?,?,?,?)",
+            conn.execute("INSERT INTO monitoreo (fecha, insecto, hospedero, localidad, utm_e, utm_n) VALUES (?,?,?,?,?,?,?)",
                         (datetime.now().strftime("%d/%m %H:%M"), "Insecto Identificado", hospedero_in.value, localidad_in.value, u[0], u[1]))
             conn.commit()
             conn.close()
@@ -42,86 +43,81 @@ def main(page: ft.Page):
     dlg = ft.AlertDialog(
         title=ft.Text("Ficha de Terreno"),
         content=ft.Column([
-            ft.Text("Complete los datos del escaneo:"),
+            ft.Text("Complete la información del hallazgo:"),
             hospedero_in, 
             localidad_in
-        ], tight=True),
+        ], tight=True, spacing=10),
         actions=[ft.ElevatedButton("Confirmar y Guardar", on_click=guardar_datos, bgcolor="green", color="white")]
     )
 
-    # --- CORRECCIÓN UNIVERSAL DE FILEPICKER ---
-    def procesar_archivo(e):
+    # --- MANEJO DE ARCHIVOS (MODO COMPATIBLE) ---
+    def al_seleccionar_archivo(e: ft.FilePickerResultEvent):
         if e.files:
-            resultado_txt.value = "🔍 Imagen capturada. Procesando..."
+            resultado_txt.value = f"🔍 Imagen: {e.files[0].name} capturada."
             page.dialog = dlg
             dlg.open = True
             page.update()
 
-    # Se crea el objeto vacío y se asigna el evento después para evitar el error 'unexpected argument'
-    picker = ft.FilePicker()
-    picker.on_result = procesar_archivo
+    # Declaración del componente fuera del flujo visual
+    picker = ft.FilePicker(on_result=al_seleccionar_archivo)
     page.overlay.append(picker)
 
-    # --- FUNCIÓN MAPA DE CALOR ---
     def generar_mapa(e):
         import matplotlib.pyplot as plt
         import matplotlib
         matplotlib.use('Agg')
-        
         try:
             conn = sqlite3.connect(db_path)
             pts = conn.execute("SELECT utm_e, utm_n FROM monitoreo").fetchall()
             conn.close()
-            
             if pts:
                 plt.figure(figsize=(4, 3))
                 plt.scatter([p[0] for p in pts], [p[1] for p in pts], color='red', s=100)
-                plt.title("Puntos de Monitoreo UTM")
+                plt.title("MAPA DE MONITOREO")
                 buf = io.BytesIO()
                 plt.savefig(buf, format='png')
                 plt.close()
                 img_b64 = base64.b64encode(buf.getvalue()).decode()
-                mapa_cont.content = ft.Image(src_base64=img_base64, border_radius=10)
+                mapa_cont.content = ft.Image(src_base64=img_b64, border_radius=10)
                 mapa_cont.visible = True
                 page.update()
             else:
-                resultado_txt.value = "⚠️ No hay datos registrados."
+                resultado_txt.value = "⚠️ No hay datos para el mapa."
                 page.update()
         except:
-            resultado_txt.value = "Error al generar el mapa."
+            resultado_txt.value = "Error al generar mapa."
             page.update()
 
-    # --- DISEÑO PRINCIPAL (UI) ---
+    # --- DISEÑO FINAL REFORZADO ---
     page.add(
         ft.Text("MaestroScan Pro", size=32, weight="bold", color="#1B5E20"),
-        ft.Text("MAESTRO SOLUTION - TECNOLOGÍA DE CAMPO", size=10, italic=True),
-        ft.Divider(height=20),
+        ft.Text("MAESTRO SOLUTION", size=12, color="grey"),
+        ft.Divider(height=30),
         
-        # Botón Grande de Escaneo
-        ft.GestureDetector(
-            on_tap=lambda _: picker.pick_files(),
-            content=ft.Container(
-                content=ft.Column([
-                    ft.Icon(ft.Icons.CAMERA_ALT, size=60, color="white"),
-                    ft.Text("ESCANEAR EN TERRENO", color="white", weight="bold")
-                ], alignment="center", spacing=10),
-                bgcolor="#2E7D32",
-                padding=50,
-                border_radius=30,
+        # El Botón ahora llama directamente al Picker de forma limpia
+        ft.ElevatedButton(
+            "ESCANEAR INSECTO",
+            icon=ft.Icons.CAMERA_ALT,
+            on_click=lambda _: picker.pick_files(allow_multiple=False),
+            style=ft.ButtonStyle(
+                bgcolor="#2E7D32", 
+                color="white",
+                padding=30,
+                shape=ft.RoundedRectangleBorder(radius=15)
             )
         ),
         
+        ft.Container(height=10),
         resultado_txt,
-        ft.Divider(height=30),
+        ft.Divider(height=40),
         
-        ft.ElevatedButton(
-            "VER MAPA DE CALOR UTM", 
+        ft.OutlinedButton(
+            "GENERAR MAPA DE CALOR UTM", 
             icon=ft.Icons.MAP, 
             on_click=generar_mapa,
-            style=ft.ButtonStyle(color="green")
+            style=ft.ButtonStyle(color="#2E7D32")
         ),
         
         ft.Container(height=10),
-        mapa_cont,
-        ft.Text("© 2025 Maestro Solution", size=10, color="grey")
+        mapa_cont
     )
