@@ -1,130 +1,91 @@
 import flet as ft
 import os
-import sys
 import sqlite3
-import utm
-import matplotlib.pyplot as plt
-import matplotlib
 from datetime import datetime
 import io
 import base64
 
-# Configurar matplotlib para modo servidor
-matplotlib.use('Agg')
-
-base_path = os.path.dirname(os.path.abspath(__file__))
-sys.path.append(base_path)
-
 def main(page: ft.Page):
     page.title = "MaestroScan Pro - Maestro Solution"
     page.theme_mode = ft.ThemeMode.LIGHT
-    page.padding = 20
-    page.scroll = ft.ScrollMode.AUTO
     page.horizontal_alignment = ft.CrossAxisAlignment.CENTER
+    page.scroll = ft.ScrollMode.AUTO
     
-    db_path = "/tmp/maestro_scan_v5.db"
-    
-    # Inicializar DB
-    conn = sqlite3.connect(db_path)
-    conn.execute("""CREATE TABLE IF NOT EXISTS monitoreo (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT, 
-                    fecha TEXT, insecto TEXT, hospedero TEXT, 
-                    localidad TEXT, utm_e REAL, utm_n REAL)""")
-    conn.close()
+    db_path = "/tmp/maestro_scan_v10.db"
 
-    # --- VARIABLES Y GPS SEGURO ---
+    # --- INICIALIZACIÓN DE DB ---
+    def init_db():
+        conn = sqlite3.connect(db_path)
+        conn.execute("""CREATE TABLE IF NOT EXISTS monitoreo 
+                     (id INTEGER PRIMARY KEY, fecha TEXT, insecto TEXT, 
+                      hospedero TEXT, localidad TEXT, utm_e REAL, utm_n REAL)""")
+        conn.close()
+
+    init_db()
+
+    # --- VARIABLES ---
     current_lat, current_lon = -33.4489, -70.6693
-    detected_insect = ""
+    det_insect = "Identificando..."
 
-    def on_location_event(e):
-        nonlocal current_lat, current_lon
-        try:
-            current_lat = e.latitude
-            current_lon = e.longitude
-            u = utm.from_latlon(current_lat, current_lon)
-            gps_info.value = f"📍 UTM: {int(u[0])}E {int(u[1])}N"
-            page.update()
-        except: pass
+    # --- COMPONENTES DE UI ---
+    loading = ft.ProgressBar(width=300, visible=False, color="green")
+    resultado_txt = ft.Text("", weight="bold", size=16)
+    contenedor_mapa = ft.Container(visible=False)
+    
+    hospedero_in = ft.TextField(label="Hospedero / Cultivo")
+    localidad_in = ft.TextField(label="Localidad")
 
-    # CARGA SEGURA DE GPS (Evita el AttributeError)
-    try:
-        if hasattr(ft, "Geolocator"):
-            lp = ft.Geolocator()
-            lp.on_change = on_location_event
-            page.overlay.append(lp)
-        else:
-            print("Geolocator no disponible en esta versión de Flet")
-    except Exception as ex:
-        print(f"Error inicializando GPS: {ex}")
-
-    # --- FORMULARIO ---
-    hospedero_input = ft.TextField(label="Hospedero / Cultivo")
-    localidad_input = ft.TextField(label="Localidad")
-
-    def guardar_reporte(e):
-        nonlocal detected_insect
+    # --- FUNCIONES DINÁMICAS (Carga bajo demanda) ---
+    def guardar_hallazgo(e):
+        import utm # Importación interna para evitar fallos de inicio
         try:
             u = utm.from_latlon(current_lat, current_lon)
             conn = sqlite3.connect(db_path)
             conn.execute("INSERT INTO monitoreo (fecha, insecto, hospedero, localidad, utm_e, utm_n) VALUES (?,?,?,?,?,?)",
-                      (datetime.now().strftime("%Y-%m-%d %H:%M"), detected_insect, hospedero_input.value, localidad_input.value, u[0], u[1]))
+                        (datetime.now().strftime("%d/%m %H:%M"), det_insect, hospedero_in.value, localidad_in.value, u[0], u[1]))
             conn.commit()
             conn.close()
-            modal_formulario.open = False
-            resultado_txt.value = f"✅ Guardado: {detected_insect}"
+            dlg.open = False
+            resultado_txt.value = f"✅ Guardado: {det_insect}"
             page.update()
         except Exception as ex:
-            resultado_txt.value = f"Error al guardar: {ex}"
+            resultado_txt.value = f"Error GPS/UTM: {ex}"
             page.update()
 
-    modal_formulario = ft.AlertDialog(
-        title=ft.Text("Ficha Técnica"),
-        content=ft.Column([
-            ft.Text(id_text := ft.Text("", weight="bold", color="#2E7D32")),
-            hospedero_input,
-            localidad_input,
-        ], tight=True),
-        actions=[ft.ElevatedButton("Guardar", on_click=guardar_reporte)],
+    dlg = ft.AlertDialog(
+        title=ft.Text("Ficha de Terreno"),
+        content=ft.Column([hospedero_in, localidad_in], tight=True),
+        actions=[ft.ElevatedButton("Guardar Reporte", on_click=guardar_hallazgo)]
     )
 
-    # --- ESCANEO ---
-    def on_file_result(e):
-        nonlocal detected_insect
+    def al_escanear(e):
+        nonlocal det_insect
         if e.files:
             loading.visible = True
             page.update()
-            # IA Simulada para Maestro Solution
-            detected_insect = "Drosophila suzukii" 
-            id_text.value = detected_insect
+            # Simulación de IA para Maestro Solution
+            det_insect = "Drosophila suzukii"
             loading.visible = False
-            page.dialog = modal_formulario
-            modal_formulario.open = True
+            page.dialog = dlg
+            dlg.open = True
             page.update()
 
-    picker = ft.FilePicker(on_result=on_file_result)
+    picker = ft.FilePicker(on_result=al_escanear)
     page.overlay.append(picker)
 
-    # --- UI ---
-    gps_info = ft.Text("📍 GPS: Esperando señal...", size=12)
-    loading = ft.ProgressBar(width=300, visible=False, color="#2E7D32")
-    resultado_txt = ft.Text("", weight="bold")
-
-    btn_escanear = ft.Container(
-        content=ft.Column([ft.Icon(ft.Icons.CAMERA_ALT, size=40, color="white"), ft.Text("ESCANEAR", color="white")], alignment="center"),
-        bgcolor="#2E7D32", padding=30, border_radius=20,
-        on_click=lambda _: picker.pick_files(allow_multiple=False, file_type=ft.FilePickerFileType.IMAGE)
-    )
-
-    contenedor_mapa = ft.Container(visible=False)
-
-    def ver_mapa(e):
+    def generar_mapa(e):
+        import matplotlib.pyplot as plt
+        import matplotlib
+        matplotlib.use('Agg')
+        
         conn = sqlite3.connect(db_path)
-        puntos = conn.execute("SELECT utm_e, utm_n FROM monitoreo").fetchall()
+        pts = conn.execute("SELECT utm_e, utm_n FROM monitoreo").fetchall()
         conn.close()
-        if puntos:
-            plt.figure(figsize=(5,4))
-            plt.scatter([p[0] for p in puntos], [p[1] for p in puntos], c='red')
-            plt.grid(True)
+        
+        if pts:
+            plt.figure(figsize=(4, 3))
+            plt.scatter([p[0] for p in pts], [p[1] for p in pts], color='red')
+            plt.title("Mapa de Calor UTM")
             buf = io.BytesIO()
             plt.savefig(buf, format='png')
             plt.close()
@@ -133,14 +94,26 @@ def main(page: ft.Page):
             contenedor_mapa.visible = True
             page.update()
 
+    # --- CONSTRUCCIÓN DE LA PÁGINA ---
     page.add(
-        ft.Text("MaestroScan Pro", size=28, weight="bold", color="#1B5E20"),
-        gps_info,
+        ft.Text("MaestroScan Pro", size=30, weight="bold", color="green"),
+        ft.Text("MAESTRO SOLUTION - TECNOLOGÍA AGRÍCOLA", size=10),
         ft.Divider(),
-        btn_escanear,
+        ft.Container(
+            content=ft.Column([
+                ft.Icon(ft.Icons.CAMERA_ALT, size=50, color="white"),
+                ft.Text("ESCANEAR INSECTO", color="white", weight="bold")
+            ], alignment="center"),
+            bgcolor="green",
+            padding=40,
+            border_radius=25,
+            on_click=lambda _: picker.pick_files(allow_multiple=False, file_type=ft.FilePickerFileType.IMAGE)
+        ),
         loading,
         resultado_txt,
         ft.Divider(),
-        ft.OutlinedButton("VER MAPA UTM", icon=ft.Icons.MAP, on_click=ver_mapa),
+        ft.OutlinedButton("VER MAPA DE CALOR", icon=ft.Icons.MAP, on_click=generar_mapa),
         contenedor_mapa
     )
+
+# Fin del archivo
