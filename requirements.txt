@@ -1,4 +1,5 @@
-flet
+flet==0.21.0
 reportlab
 utm
 matplotlib
+requests
