@@ -4,120 +4,123 @@ import utm
 import pandas as pd
 import matplotlib.pyplot as plt
 from datetime import datetime
+import requests
 
-# 1. CONFIGURACIÓN DE INTERFAZ MODERNA Y VIVA
-st.set_page_config(
-    page_title="MaestroScan Pro", 
-    page_icon="🌿", 
-    layout="centered"
-)
+# 1. CONFIGURACIÓN VISUAL (Colores Vivos y Modernos)
+st.set_page_config(page_title="MaestroScan Pro", page_icon="🌿")
 
-# CSS Personalizado para colores vivos (Verde Agro y Blanco Limpio)
 st.markdown("""
     <style>
     .stApp { background-color: #FFFFFF; }
+    .main-header { 
+        background-color: #74B46E; 
+        padding: 10px; 
+        border-radius: 10px; 
+        color: white; 
+        text-align: center;
+        margin-bottom: 20px;
+    }
     .stButton>button {
-        background-color: #2E7D32;
+        background-color: #5BA054;
         color: white;
-        border-radius: 20px;
-        border: none;
-        height: 3em;
+        border-radius: 10px;
+        height: 3.5em;
         width: 100%;
         font-weight: bold;
+        font-size: 18px;
     }
-    .stHeader { color: #1B5E20; }
-    h1 { color: #1B5E20; font-family: 'Helvetica Neue', sans-serif; }
-    .reportview-container .main .block-container { padding-top: 2rem; }
+    .title-text { color: #1B5E20; font-size: 35px; font-weight: bold; margin-bottom: 0px; }
+    .slogan-text { color: #888888; font-size: 14px; margin-bottom: 30px; }
     </style>
     """, unsafe_allow_html=True)
 
-st.title("🌿 MaestroScan Pro")
-st.subheader("INTELIGENCIA AGRÍCOLA")
-st.markdown("---")
+# Encabezado Superior (Barra Verde de éxito)
+st.markdown('<div class="main-header">✅ Interfaz cargada sin errores</div>', unsafe_allow_html=True)
 
-DB_PATH = "maestro_data_v2.db"
+# Títulos Principales
+st.markdown('<p class="title-text">MaestroScan Pro</p>', unsafe_allow_html=True)
+st.markdown('<p style="color:#A0A0A0; margin-top:-20px;">MAESTRO SOLUTION</p>', unsafe_allow_html=True)
+st.markdown('<p class="slogan-text">Inteligencia Agrícola Al servicio del Agro</p>', unsafe_allow_html=True)
+
+# Barra de progreso decorativa
+st.progress(0.6)
+
+DB_PATH = "maestro_ai_v5.db"
 
 def init_db():
     conn = sqlite3.connect(DB_PATH)
     conn.execute("""CREATE TABLE IF NOT EXISTS monitoreo 
-                 (id INTEGER PRIMARY KEY AUTOINCREMENT, fecha TEXT, 
-                  n_comun TEXT, n_cientifico TEXT, hospedero TEXT, 
-                  tipo_plaga TEXT, control TEXT, utm_e REAL, utm_n REAL)""")
+                 (id INTEGER PRIMARY KEY AUTOINCREMENT, fecha TEXT, n_comun TEXT, 
+                  n_cientifico TEXT, hospedero TEXT, categoria TEXT, utm_e REAL, utm_n REAL)""")
     conn.close()
 
 init_db()
 
-# --- MOTOR DE ESCANEO ---
-foto = st.camera_input("📷 Capturar espécimen en terreno")
+# --- FUNCIÓN DE IDENTIFICACIÓN (BASES DE DATOS LIBRES) ---
+def buscar_datos_insecto(nombre_busqueda):
+    # Simulación de consulta a GBIF/Wikipedia
+    # En producción, aquí se enviaría la imagen a un modelo como TensorFlow Lite
+    datos_libres = {
+        "Drosophila": {"cientifico": "Drosophila suzukii", "categoria": "Plaga Primaria", "control": "Trampeo masivo y control químico."},
+        "Polilla": {"cientifico": "Lobesia botrana", "categoria": "Plaga Cuarentenaria", "control": "Confusión sexual."},
+        "Burrito": {"cientifico": "Naupactus xanthographus", "categoria": "Plaga Secundaria", "control": "Barreras físicas y químicos."}
+    }
+    return datos_libres.get(nombre_busqueda, {"cientifico": "Especie en estudio", "categoria": "Desconocida", "control": "Consultar Asesor"})
+
+# --- SECCIÓN DE ESCANEO ---
+foto = st.camera_input("ESCANEAR INSECTO")
 
 if foto:
-    st.success("✅ Análisis de Imagen Completo")
+    st.markdown("### 🔍 Analizando imagen capturada...")
     
-    # SIMULACIÓN DE IA (Aquí se conectaría el modelo de reconocimiento)
-    # Por ahora entregamos la ficha técnica avanzada que solicitaste
-    with st.expander("🔍 VER FICHA TÉCNICA DETALLADA", expanded=True):
-        col1, col2 = st.columns(2)
+    # Simulamos la aceptación de la fotografía
+    col_acc, col_can = st.columns(2)
+    with col_acc:
+        confirmar = st.button("✅ ACEPTAR")
+    with col_can:
+        cancelar = st.button("❌ CANCELAR")
+
+    if confirmar:
+        # Aquí la IA identifica (Simulamos que identificó un Burrito)
+        info = buscar_datos_insecto("Burrito")
         
-        with col1:
+        st.success(f"Identificación Exitosa: **{info['cientifico']}**")
+        
+        with st.form("ficha_ai"):
+            st.subheader("📋 Ficha Técnica Generada")
             n_comun = st.text_input("Nombre Común", value="Burrito de la vid")
-            n_cientifico = st.text_input("Nombre Científico", value="Naupactus xanthographus")
-            hospedero = st.text_input("Hospedero Detectado", value="Vid vinífera / Frutales de carozo")
-        
-        with col2:
-            tipo_plaga = st.selectbox("Categoría de Plaga", 
-                                    ["Plaga Primaria", "Plaga Secundaria", "Cuarentenaria", "Benéfico"])
-            danos = st.text_area("Daños Asociados", value="Consumo de follaje por adultos. Larvas destruyen raicillas comprometiendo el vigor.")
+            n_cientifico = st.text_input("Nombre Científico", value=info['cientifico'])
+            hospedero = st.text_input("Hospedero / Daños", value="Frutales y Vides. Daño en raíces y follaje.")
+            categoria = st.selectbox("Clasificación", ["Plaga Primaria", "Plaga Secundaria", "Benéfico"], index=1)
+            
+            st.warning(f"**Recomendación:** {info['control']}")
+            
+            if st.form_submit_button("💾 GUARDAR EN REGISTRO UTM"):
+                u = utm.from_latlon(-33.45, -70.66)
+                conn = sqlite3.connect(DB_PATH)
+                conn.execute("INSERT INTO monitoreo (fecha, n_comun, n_cientifico, hospedero, categoria, utm_e, utm_n) VALUES (?,?,?,?,?,?,?)",
+                            (datetime.now().strftime("%d/%m %H:%M"), n_comun, n_cientifico, hospedero, categoria, u[0], u[1]))
+                conn.commit()
+                conn.close()
+                st.balloons()
 
-        st.warning("**Recomendación de Control:** Requiere control químico/biológico dirigido según umbral económico.")
-        
-        # Botón de contacto con asesor
-        if st.button("📲 CONTACTAR ASESOR MAESTRO SOLUTION"):
-            st.write("📞 Conectando con su asesor técnico... (WhatsApp/Llamada)")
+# --- SECCIÓN DE MAPA Y EXCEL ---
+st.markdown("---")
+if st.button("🗺️ VER MAPA DE CALOR UTM"):
+    conn = sqlite3.connect(DB_PATH)
+    df = pd.read_sql_query("SELECT * FROM monitoreo", conn)
+    conn.close()
 
-        # Lógica de Guardado
-        if st.button("💾 REGISTRAR HALLAZGO Y COORDENADAS"):
-            u = utm.from_latlon(-33.45, -70.66)
-            conn = sqlite3.connect(DB_PATH)
-            conn.execute("""INSERT INTO monitoreo 
-                         (fecha, n_comun, n_cientifico, hospedero, tipo_plaga, control, utm_e, utm_n) 
-                         VALUES (?,?,?,?,?,?,?,?)""",
-                        (datetime.now().strftime("%d/%m %H:%M"), n_comun, n_cientifico, 
-                         hospedero, tipo_plaga, "Químico/Manual", u[0], u[1]))
-            conn.commit()
-            conn.close()
-            st.balloons()
-
-# --- SECCIÓN DE REPORTES Y EXCEL ---
-st.divider()
-st.header("📊 Gestión de Datos")
-
-conn = sqlite3.connect(DB_PATH)
-df = pd.read_sql_query("SELECT * FROM monitoreo", conn)
-conn.close()
-
-if not df.empty:
-    # Botón para descargar Excel (CSV compatible)
-    csv = df.to_csv(index=False).encode('utf-8')
-    st.download_button(
-        label="📥 DESCARGAR BASE DE DATOS (EXCEL/CSV)",
-        data=csv,
-        file_name=f"monitoreo_maestro_{datetime.now().strftime('%Y%m%d')}.csv",
-        mime="text/csv",
-    )
-    
-    # Vista previa de la tabla moderna
-    st.dataframe(df.style.highlight_max(axis=0, color='#E8F5E9'))
-
-    # Mapa de Calor
-    if st.button("🗺️ ACTUALIZAR MAPA UTM"):
+    if not df.empty:
         fig, ax = plt.subplots()
-        ax.scatter(df['utm_e'], df['utm_n'], color='#D32F2F', s=120, edgecolors='white')
-        ax.set_title("Puntos Críticos de Plagas - Maestro Solution", color='#1B5E20')
-        ax.set_facecolor('#F1F8E9')
+        ax.scatter(df['utm_e'], df['utm_n'], color='red', s=100)
+        ax.set_title("Puntos Críticos Maestro Solution")
         st.pyplot(fig)
-else:
-    st.info("No hay registros pendientes de descarga.")
+        
+        # Botón Excel
+        csv = df.to_csv(index=False).encode('utf-8')
+        st.download_button("📥 DESCARGAR REPORTE EXCEL", csv, "monitoreo.csv", "text/csv")
+    else:
+        st.info("No hay datos para graficar.")
 
-st.sidebar.image("https://cdn-icons-png.flaticon.com/512/2910/2910756.png", width=100)
-st.sidebar.write("**MaestroScan Pro v2.0**")
-st.sidebar.write("Inteligencia Agrícola al servicio del campo.")
+st.markdown('<p style="text-align:center; color:grey; font-size:10px;">© 2025 Maestro Solution</p>', unsafe_allow_html=True)
