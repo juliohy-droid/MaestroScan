@@ -1,4 +1,5 @@
-flet
-reportlab
+streamlit
 utm
 matplotlib
+pandas
+sqlite3
