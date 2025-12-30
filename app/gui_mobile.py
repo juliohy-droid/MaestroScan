@@ -9,10 +9,10 @@ def main(page: ft.Page):
     page.theme_mode = ft.ThemeMode.LIGHT
     page.scroll = ft.ScrollMode.AUTO
     
-    db_path = "/tmp/maestro_v25.db"
+    db_path = "/tmp/maestro_solution_v25.db"
 
     # --- ELEMENTOS DE INTERFAZ ---
-    resultado_txt = ft.Text("Listo para escanear", weight="bold", size=16)
+    resultado_txt = ft.Text("Listo para iniciar", weight="bold", size=16)
     hospedero_in = ft.TextField(label="Hospedero / Cultivo", border_color="green")
     localidad_in = ft.TextField(label="Localidad", border_color="green")
     mapa_cont = ft.Container(visible=False)
@@ -21,11 +21,11 @@ def main(page: ft.Page):
     def guardar_registro(e):
         import utm
         try:
-            u = utm.from_latlon(-33.45, -70.66) # Coordenada de prueba
+            u = utm.from_latlon(-33.45, -70.66) # Coordenada base
             conn = sqlite3.connect(db_path)
             conn.execute("CREATE TABLE IF NOT EXISTS monitoreo (id INTEGER PRIMARY KEY, fecha TEXT, insecto TEXT, hospedero TEXT, localidad TEXT, utm_e REAL, utm_n REAL)")
             conn.execute("INSERT INTO monitoreo (fecha, insecto, hospedero, localidad, utm_e, utm_n) VALUES (?,?,?,?,?,?)",
-                        (datetime.now().strftime("%H:%M"), "Drosophila suzukii", hospedero_in.value, localidad_in.value, u[0], u[1]))
+                        (datetime.now().strftime("%d/%m %H:%M"), "Drosophila suzukii", hospedero_in.value, localidad_in.value, u[0], u[1]))
             conn.commit()
             conn.close()
             dlg.open = False
@@ -33,7 +33,7 @@ def main(page: ft.Page):
             resultado_txt.color = "green"
             page.update()
         except Exception as ex:
-            resultado_txt.value = f"Error al guardar: {ex}"
+            resultado_txt.value = f"Error: {ex}"
             page.update()
 
     dlg = ft.AlertDialog(
@@ -42,16 +42,17 @@ def main(page: ft.Page):
         actions=[ft.ElevatedButton("Guardar Reporte", on_click=guardar_registro)]
     )
 
-    # --- MOTOR DE CÁMARA (NUEVO INTENTO) ---
-    def resultado_camara(e):
+    # --- MOTOR DE CÁMARA (CORRECCIÓN DEFINITIVA) ---
+    def al_recibir_resultado(e):
         if e.files:
-            resultado_txt.value = "📸 Imagen cargada con éxito"
+            resultado_txt.value = f"📸 Imagen capturada: {e.files[0].name}"
             page.dialog = dlg
             dlg.open = True
             page.update()
 
-    # Declaración ultra-básica para evitar la franja roja
-    archivo_picker = ft.FilePicker(on_result=resultado_camara)
+    # CORRECCIÓN AQUÍ: Se crea el objeto vacío y se asigna la función después
+    archivo_picker = ft.FilePicker()
+    archivo_picker.on_result = al_recibir_resultado 
     page.overlay.append(archivo_picker)
 
     # --- MAPA DE CALOR ---
@@ -63,7 +64,6 @@ def main(page: ft.Page):
         matplotlib.use('Agg')
         try:
             conn = sqlite3.connect(db_path)
-            # Aseguramos que la tabla existe antes de leer
             conn.execute("CREATE TABLE IF NOT EXISTS monitoreo (id INTEGER PRIMARY KEY, fecha TEXT, insecto TEXT, hospedero TEXT, localidad TEXT, utm_e REAL, utm_n REAL)")
             pts = conn.execute("SELECT utm_e, utm_n FROM monitoreo").fetchall()
             conn.close()
@@ -71,7 +71,7 @@ def main(page: ft.Page):
             if pts:
                 plt.figure(figsize=(4, 3))
                 plt.scatter([p[0] for p in pts], [p[1] for p in pts], color='red', s=100)
-                plt.title("Zonas de Monitoreo Maestro Solution")
+                plt.title("Zonas de Monitoreo")
                 buf = io.BytesIO()
                 plt.savefig(buf, format='png')
                 plt.close()
@@ -79,7 +79,7 @@ def main(page: ft.Page):
                 mapa_cont.content = ft.Image(src_base64=img_b64, border_radius=10)
                 mapa_cont.visible = True
             else:
-                resultado_txt.value = "⚠️ No hay datos guardados todavía"
+                resultado_txt.value = "⚠️ No hay datos registrados."
             page.update()
         except Exception as ex:
             resultado_txt.value = f"Error Mapa: {ex}"
@@ -91,19 +91,15 @@ def main(page: ft.Page):
         ft.Text("MAESTRO SOLUTION", size=10, color="grey"),
         ft.Divider(height=30),
         
-        # El botón de Escaneo
-        ft.Container(
-            padding=20,
-            content=ft.ElevatedButton(
-                "ABRIR CÁMARA",
-                icon=ft.Icons.CAMERA_ALT,
-                # Esta instrucción obliga al navegador a abrir el selector de archivos/cámara
-                on_click=lambda _: archivo_picker.pick_files(allow_multiple=False),
-                style=ft.ButtonStyle(
-                    bgcolor="#2E7D32", 
-                    color="white",
-                    padding=25,
-                )
+        ft.ElevatedButton(
+            "ABRIR CÁMARA",
+            icon=ft.Icons.CAMERA_ALT,
+            # Comando estándar para activar el selector
+            on_click=lambda _: archivo_picker.pick_files(allow_multiple=False),
+            style=ft.ButtonStyle(
+                bgcolor="#2E7D32", 
+                color="white",
+                padding=25,
             )
         ),
         
