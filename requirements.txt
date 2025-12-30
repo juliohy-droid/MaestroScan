@@ -2,3 +2,5 @@ streamlit
 utm
 matplotlib
 pandas
+Pillow
+numpy
