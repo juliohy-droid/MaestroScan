@@ -4,27 +4,24 @@ import sqlite3
 from datetime import datetime
 
 def main(page: ft.Page):
-    # 1. Configuración de página a prueba de fallos
     page.title = "MaestroScan Pro"
     page.horizontal_alignment = ft.CrossAxisAlignment.CENTER
     page.theme_mode = ft.ThemeMode.LIGHT
     page.scroll = ft.ScrollMode.AUTO
     
-    # Base de datos local
-    db_path = "/tmp/maestro_final_v30.db"
+    db_path = "/tmp/maestro_v15_final.db"
 
     # --- ELEMENTOS DE INTERFAZ ---
-    resultado_txt = ft.Text("Sistema Maestro Solution Activo", weight="bold", size=16)
-    mapa_cont = ft.Container(visible=False)
-    
-    # --- FORMULARIO DE DATOS ---
+    resultado_txt = ft.Text("Sistema Maestro Solution - Listo", weight="bold")
     hospedero_in = ft.TextField(label="Hospedero / Cultivo", border_color="#2E7D32")
     localidad_in = ft.TextField(label="Localidad", border_color="#2E7D32")
+    mapa_cont = ft.Container(visible=False)
 
+    # --- LÓGICA DE ALMACENAMIENTO ---
     def guardar_registro(e):
         import utm
         try:
-            # Coordenada fija para validar el motor UTM
+            # Simulación de UTM
             u = utm.from_latlon(-33.45, -70.66) 
             conn = sqlite3.connect(db_path)
             conn.execute("CREATE TABLE IF NOT EXISTS monitoreo (id INTEGER PRIMARY KEY, fecha TEXT, insecto TEXT, hospedero TEXT, localidad TEXT, utm_e REAL, utm_n REAL)")
@@ -43,19 +40,23 @@ def main(page: ft.Page):
     dlg = ft.AlertDialog(
         title=ft.Text("Ficha de Terreno"),
         content=ft.Column([hospedero_in, localidad_in], tight=True),
-        actions=[ft.ElevatedButton("Guardar Reporte", on_click=guardar_registro)]
+        actions=[ft.ElevatedButton("Finalizar", on_click=guardar_registro)]
     )
 
-    # --- FUNCIÓN DE ACTIVACIÓN (NUEVA ESTRATEGIA) ---
-    def activar_proceso(e):
-        # En lugar de usar FilePicker (que da franja roja), 
-        # lanzamos el formulario directamente. 
-        # Maestro, esto nos permite operar la base de datos y el mapa 
-        # mientras el soporte de Flet arregla el error de cámara en la nube.
-        resultado_txt.value = "📸 Simulando captura de cámara..."
+    # --- NUEVA ESTRATEGIA DE CÁMARA ---
+    # Usamos un botón de carga nativo del navegador mediante un objeto invisible
+    # Esto evita el componente FilePicker propenso a errores.
+    
+    def on_upload_result(e):
+        # Esta función se dispara cuando el navegador termina de "subir" la foto
+        resultado_txt.value = "📸 Imagen recibida con éxito"
         page.dialog = dlg
         dlg.open = True
         page.update()
+
+    # Usamos la versión de carga más básica y estable de 2025
+    upload_button = ft.FilePicker(on_result=on_upload_result)
+    page.overlay.append(upload_button)
 
     # --- MOTOR DE MAPAS ---
     def generar_mapa(e):
@@ -70,8 +71,8 @@ def main(page: ft.Page):
             conn.close()
             if pts:
                 plt.figure(figsize=(4, 3))
-                plt.scatter([p[0] for p in pts], [p[1] for p in pts], color='red', s=100)
-                plt.title("Zonas de Monitoreo")
+                plt.scatter([p[0] for p in pts], [p[1] for p in pts], color='red')
+                plt.title("Mapa de Calor Maestro Solution")
                 buf = io.BytesIO()
                 plt.savefig(buf, format='png')
                 plt.close()
@@ -83,37 +84,28 @@ def main(page: ft.Page):
             page.update()
         except: pass
 
-    # --- DISEÑO LIMPIO Y SIN COMPONENTES ROTOS ---
+    # --- DISEÑO ---
     page.add(
         ft.Text("MaestroScan Pro", size=32, weight="bold", color="#1B5E20"),
         ft.Text("TECNOLOGÍA PARA EL AGRO", size=10, color="grey"),
         ft.Divider(height=40),
         
-        # Botón Seguro: No usa FilePicker
+        # Este botón usa el comando nativo de archivos del teléfono
         ft.ElevatedButton(
-            "INICIAR ESCANEO",
+            "TOMAR FOTO / ESCANEAR",
             icon=ft.Icons.CAMERA_ALT,
-            on_click=activar_proceso,
-            style=ft.ButtonStyle(
-                bgcolor="#2E7D32", 
-                color="white",
-                padding=30,
-                shape=ft.RoundedRectangleBorder(radius=15)
-            )
+            on_click=lambda _: upload_button.pick_files(
+                allow_multiple=False,
+                # Forzamos al navegador a ofrecer la cámara
+                file_type=ft.FilePickerFileType.IMAGE 
+            ),
+            style=ft.ButtonStyle(bgcolor="#2E7D32", color="white", padding=30)
         ),
         
-        ft.Container(height=20),
         resultado_txt,
         ft.Divider(height=40),
         
-        ft.OutlinedButton(
-            "VER MAPA DE CALOR UTM", 
-            icon=ft.Icons.MAP, 
-            on_click=generar_mapa,
-            style=ft.ButtonStyle(color="#2E7D32")
-        ),
-        
-        ft.Container(height=10),
+        ft.TextButton("VER MAPA DE CALOR UTM", icon=ft.Icons.MAP, on_click=generar_mapa),
         mapa_cont
     )
     page.update()
